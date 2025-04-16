@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .gradient-text-musync {
+    @apply bg-gradient-to-r from-purple-500 via-green-400 to-orange-500 inline-block text-transparent bg-clip-text;
+  }
+  
+  .bg-darkBg {
+    @apply bg-gray-900;
+  }
+}
