@@ -19,8 +19,8 @@ export class SoundCloudService {
   private constructor() {
     this.clientId = process.env.SOUNDCLOUD_CLIENT_ID || '';
     this.clientSecret = process.env.SOUNDCLOUD_CLIENT_SECRET || '';
-    this.redirectUri = process.env.NODE_ENV === 'production' 
-      ? 'https://musync.vercel.app/auth/soundcloud/callback'
+    this.redirectUri = process.env.NODE_ENV === 'production'
+      ? 'https://musync-sable.vercel.app/auth/soundcloud/callback'
       : 'http://localhost:3000/auth/soundcloud/callback';
 
     if (!this.clientId || !this.clientSecret) {

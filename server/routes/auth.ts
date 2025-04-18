@@ -1,129 +1,135 @@
 import { Router } from 'express';
 import { SpotifyService } from '../services/spotify';
+import { AppleMusicService } from '../services/applemusic';
 import { SoundCloudService } from '../services/soundcloud';
+import { storage } from '../storage';
 import { log } from '../vite';
 import crypto from 'crypto';
-import { storage } from '../storage';
 
 const router = Router();
 const spotifyService = SpotifyService.getInstance();
+const appleMusicService = AppleMusicService.getInstance();
 const soundcloudService = SoundCloudService.getInstance();
 
-// Middleware to ensure user is authenticated
-const isAuthenticated = (req: any, res: any, next: any) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.redirect('/login');
+// Generate state parameter for OAuth
+const generateState = () => {
+  return crypto.randomBytes(32).toString('hex');
 };
 
-// Spotify OAuth routes
-router.get('/spotify', isAuthenticated, (req: any, res) => {
-  // Generate and store state for CSRF protection
-  const state = crypto.randomBytes(32).toString('hex');
-  req.session.oauthState = state;
-  req.session.userId = req.user.id;
+// Helper function to get redirect URL
+const getRedirectUrl = (path: string, params?: Record<string, string>) => {
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? 'https://musync-sable.vercel.app'
+    : 'http://localhost:5173';
+  
+  const url = new URL(path, baseUrl);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value);
+    });
+  }
+  return url.toString();
+};
 
+// Spotify auth routes
+router.get('/spotify', (req, res) => {
+  const state = generateState();
+  req.session.oauthState = state;
   const authUrl = spotifyService.getAuthUrl(state);
-  // Directly redirect to Spotify's authorization page
   res.redirect(authUrl);
 });
 
-router.get('/spotify/callback', async (req: any, res) => {
+router.get('/spotify/callback', async (req, res) => {
   try {
-    const { code, state, error } = req.query;
-    
-    if (error) {
-      log(`Spotify auth error: ${error}`);
-      return res.redirect('http://localhost:5000/dashboard?error=auth_failed');
+    const { code, state } = req.query;
+    if (!code || !state || state !== req.session.oauthState) {
+      return res.redirect(getRedirectUrl('/login', { error: 'invalid_state' }));
     }
 
-    // Verify state to prevent CSRF
-    if (!state || state !== req.session.oauthState) {
-      log('Invalid OAuth state');
-      return res.redirect('http://localhost:5000/dashboard?error=invalid_state');
+    await spotifyService.handleCallback(code as string);
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.redirect(getRedirectUrl('/login', { error: 'not_authenticated' }));
     }
 
-    if (!code || typeof code !== 'string') {
-      log('No code received from Spotify');
-      return res.redirect('http://localhost:5000/dashboard?error=no_code');
-    }
-
-    if (!req.session.userId) {
-      log('No user session found');
-      return res.redirect('http://localhost:5000/dashboard?error=no_session');
-    }
-
-    await spotifyService.handleCallback(code);
-    const platform = await spotifyService.connect(
-      req.session.userId,
-      spotifyService.getAccessToken() || '',
-      spotifyService.getRefreshToken() || ''
+    await spotifyService.connect(
+      userId,
+      spotifyService.getAccessToken()!,
+      spotifyService.getRefreshToken()!
     );
 
-    // Clear OAuth state
-    delete req.session.oauthState;
-    
-    // Redirect back to the frontend with success message
-    res.redirect('http://localhost:5000/dashboard?success=spotify_connected');
-  } catch (err) {
-    log(`Error handling Spotify callback: ${err}`);
-    res.redirect('http://localhost:5000/dashboard?error=callback_failed');
+    res.redirect(getRedirectUrl('/platforms'));
+  } catch (error) {
+    log(`Spotify callback error: ${error}`);
+    res.redirect(getRedirectUrl('/login', { error: 'spotify_auth_failed' }));
   }
 });
 
-// SoundCloud OAuth routes
-router.get('/soundcloud', isAuthenticated, (req: any, res) => {
-  // Generate and store state for CSRF protection
-  const state = crypto.randomBytes(32).toString('hex');
+// Apple Music auth routes
+router.get('/apple-music', (req, res) => {
+  const state = generateState();
   req.session.oauthState = state;
-  req.session.userId = req.user.id;
-
-  const authUrl = soundcloudService.getAuthUrl(state);
-  // Directly redirect to SoundCloud's authorization page
+  const authUrl = appleMusicService.getAuthUrl(state);
   res.redirect(authUrl);
 });
 
-router.get('/soundcloud/callback', async (req: any, res) => {
+router.get('/apple-music/callback', async (req, res) => {
   try {
-    const { code, state, error } = req.query;
-    
-    if (error) {
-      log(`SoundCloud auth error: ${error}`);
-      return res.redirect('http://localhost:5000/dashboard?error=auth_failed');
+    const { code, state } = req.query;
+    if (!code || !state || state !== req.session.oauthState) {
+      return res.redirect(getRedirectUrl('/login', { error: 'invalid_state' }));
     }
 
-    // Verify state to prevent CSRF
-    if (!state || state !== req.session.oauthState) {
-      log('Invalid OAuth state');
-      return res.redirect('http://localhost:5000/dashboard?error=invalid_state');
+    await appleMusicService.handleCallback(code as string);
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.redirect(getRedirectUrl('/login', { error: 'not_authenticated' }));
     }
 
-    if (!code || typeof code !== 'string') {
-      log('No code received from SoundCloud');
-      return res.redirect('http://localhost:5000/dashboard?error=no_code');
-    }
-
-    if (!req.session.userId) {
-      log('No user session found');
-      return res.redirect('http://localhost:5000/dashboard?error=no_session');
-    }
-
-    await soundcloudService.handleCallback(code);
-    const platform = await soundcloudService.connect(
-      req.session.userId,
-      soundcloudService.getAccessToken() || '',
-      soundcloudService.getRefreshToken() || ''
+    await appleMusicService.connect(
+      userId,
+      appleMusicService.getAccessToken()!,
+      appleMusicService.getRefreshToken()!
     );
 
-    // Clear OAuth state
-    delete req.session.oauthState;
-    
-    // Redirect back to the frontend with success message
-    res.redirect('http://localhost:5000/dashboard?success=soundcloud_connected');
-  } catch (err) {
-    log(`Error handling SoundCloud callback: ${err}`);
-    res.redirect('http://localhost:5000/dashboard?error=callback_failed');
+    res.redirect(getRedirectUrl('/platforms'));
+  } catch (error) {
+    log(`Apple Music callback error: ${error}`);
+    res.redirect(getRedirectUrl('/login', { error: 'apple_music_auth_failed' }));
+  }
+});
+
+// SoundCloud auth routes
+router.get('/soundcloud', (req, res) => {
+  const state = generateState();
+  req.session.oauthState = state;
+  const authUrl = soundcloudService.getAuthUrl(state);
+  res.redirect(authUrl);
+});
+
+router.get('/soundcloud/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    if (!code || !state || state !== req.session.oauthState) {
+      return res.redirect(getRedirectUrl('/login', { error: 'invalid_state' }));
+    }
+
+    await soundcloudService.handleCallback(code as string);
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.redirect(getRedirectUrl('/login', { error: 'not_authenticated' }));
+    }
+
+    await soundcloudService.connect(
+      userId,
+      soundcloudService.getAccessToken()!,
+      soundcloudService.getRefreshToken()!
+    );
+
+    res.redirect(getRedirectUrl('/platforms'));
+  } catch (error) {
+    log(`SoundCloud callback error: ${error}`);
+    res.redirect(getRedirectUrl('/login', { error: 'soundcloud_auth_failed' }));
   }
 });
 

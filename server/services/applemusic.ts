@@ -20,7 +20,7 @@ export class AppleMusicService {
     this.clientId = process.env.APPLE_MUSIC_CLIENT_ID || '';
     this.clientSecret = process.env.APPLE_MUSIC_CLIENT_SECRET || '';
     this.redirectUri = process.env.NODE_ENV === 'production'
-      ? 'https://musync.vercel.app/auth/apple-music/callback'
+      ? 'https://musync-sable.vercel.app/auth/apple-music/callback'
       : 'http://localhost:3000/auth/apple-music/callback';
     
     if (!this.clientId || !this.clientSecret) {
@@ -40,7 +40,7 @@ export class AppleMusicService {
     return AppleMusicService.instance;
   }
 
-  public getAuthUrl(): string {
+  public getAuthUrl(state: string): string {
     const scopes = [
       'user-library-read',
       'user-library-modify',
@@ -53,6 +53,7 @@ export class AppleMusicService {
       response_type: 'code',
       redirect_uri: this.redirectUri,
       scope: scopes.join(' '),
+      state,
       response_mode: 'form_post'
     });
 

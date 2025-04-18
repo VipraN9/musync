@@ -20,7 +20,7 @@ export class SpotifyService {
     this.clientId = process.env.SPOTIFY_CLIENT_ID || '';
     this.clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '';
     this.redirectUri = process.env.NODE_ENV === 'production'
-      ? 'https://musync.vercel.app/auth/spotify/callback'
+      ? 'https://musync-sable.vercel.app/auth/spotify/callback'
       : 'http://localhost:3000/auth/spotify/callback';
 
     if (!this.clientId || !this.clientSecret) {
