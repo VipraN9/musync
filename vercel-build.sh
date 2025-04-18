@@ -6,11 +6,12 @@ npm install
 # Build the frontend
 npm run build
 
-# Make the build directory
+# Move built files to the correct location
 mkdir -p dist/public
+cp -r dist/* dist/public/
 
-# Move the built files to the correct location
-mv dist/* dist/public/ 2>/dev/null || true
+# Make sure the server files are executable
+chmod +x dist/index.js
 
 # Build the server
 npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist 
